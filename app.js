@@ -25,7 +25,7 @@ function migrateLegacy(x){const s=blank();s.items=x.items.map(i=>({id:i.id,name:
 function normalizeState(x){normalizeCategories(x);if(!Array.isArray(x.purchases))x.purchases=[];return x}
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(valid(x))return normalizeState(x)}catch{}try{const old=JSON.parse(localStorage.getItem(LEGACY_KEY));if(old&&Array.isArray(old.items)&&Array.isArray(old.outfits))return migrateLegacy(old)}catch{}const s=blank();s.activeTripId=s.trips[0].id;return s}
 function valid(s){return !!(s&&(!('purchases' in s)||Array.isArray(s.purchases)&&s.purchases.every(p=>typeof p.id==='string'&&typeof p.itemId==='string'&&typeof p.tripId==='string'&&typeof p.date==='string'))&&Array.isArray(s.items)&&Array.isArray(s.trips)&&Array.isArray(s.outfits)&&s.items.every(i=>typeof i.id==='string'&&typeof i.name==='string')&&s.trips.every(t=>typeof t.id==='string'&&typeof t.name==='string'&&Array.isArray(t.itemIds)&&Array.isArray(t.packedIds))&&s.outfits.every(o=>typeof o.id==='string'&&typeof o.date==='string'&&/^\d{4}-\d\d-\d\d$/.test(o.date)&&Array.isArray(o.itemIds)&&typeof o.tripId==='string'))}
-let state=load(),editing=null,selected=new Set(),editingPurchase=null;
+let state=load(),editing=null,selected=new Set(),editingPurchase=null,wardrobeFilter='All';
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));$('saveStatus').textContent='saved on this device';return true}catch(e){alert('Unable to save! Export a backup now. '+e.message);return false}}
 persist();
 const active=()=>state.trips.find(t=>t.id===state.activeTripId)||state.trips[0];
@@ -40,7 +40,27 @@ $('tripSelect').addEventListener('change',e=>{state.activeTripId=e.target.value;
 $('newTrip').addEventListener('click',()=>{const name=prompt('New trip name:');if(!name?.trim())return;const t={id:uid(),name:name.trim(),itemIds:[],packedIds:[]};state.trips.push(t);state.activeTripId=t.id;selected.clear();persist();render()});
 $('renameTrip').addEventListener('click',()=>{const name=prompt('Rename this trip:',active().name);if(name?.trim()){active().name=name.trim();persist();render()}});
 $('date').value=day();
-function renderWardrobe(){const t=active(),root=$('wardrobeItems');root.replaceChildren();const q=$('searchWardrobe').value.trim().toLowerCase();const arr=state.items.filter(i=>!q||i.name.toLowerCase().includes(q));$('catalogCount').textContent=`${state.items.length} catalog items · ${t.itemIds.length} in this trip`;
+function renderWardrobe(){const t=active(),root=$('wardrobeItems');root.replaceChildren();
+ const q=$('searchWardrobe').value.trim().toLowerCase();
+ const arr=state.items.filter(i=>(wardrobeFilter==='All'||i.category===wardrobeFilter)&&(!q||i.name.toLowerCase().includes(q)));
+ const filters=$('wardrobeCategoryFilters');
+ // Keep the buttons in place during routine renders so horizontal scroll position is retained.
+ if(!filters.children.length){
+  for(const category of ['All',...CATEGORIES]){
+   const b=btn(category==='All'?'all':category.toLowerCase(),()=>{wardrobeFilter=category;renderWardrobe()},'category-filter');
+   b.dataset.category=category;
+   filters.append(b);
+  }
+ }
+ for(const b of filters.children){
+  const current=b.dataset.category===wardrobeFilter;
+  b.classList.toggle('selected',current);
+  b.setAttribute('aria-pressed',String(current));
+  const count=b.dataset.category==='All'?state.items.length:state.items.filter(i=>i.category===b.dataset.category).length;
+  b.title=`${count} ${b.dataset.category==='All'?'catalog items':b.dataset.category.toLowerCase()+' items'}`;
+ }
+ $('catalogCount').textContent=`${arr.length} shown · ${state.items.length} catalog items · ${t.itemIds.length} in this trip`;
+
 for(const category of CATEGORIES){const group=arr.filter(i=>i.category===category);if(!group.length)continue;root.append(node('h3',category.toLowerCase()+'. ♱','catalog-heading'));for(const i of group){const row=checkbox(root,i,t.itemIds.includes(i.id),yes=>{if(yes&&!t.itemIds.includes(i.id))t.itemIds.push(i.id);if(!yes){t.itemIds=t.itemIds.filter(x=>x!==i.id);t.packedIds=t.packedIds.filter(x=>x!==i.id)}persist();render()});const categorySelect=node('select');categorySelect.className='category-select';categorySelect.setAttribute('aria-label','Category for '+i.name);
  for(const cat of CATEGORIES){const opt=node('option',cat);opt.value=cat;opt.selected=cat===i.category;categorySelect.append(opt)}
  categorySelect.addEventListener('click',e=>e.stopPropagation());
@@ -49,7 +69,7 @@ for(const category of CATEGORIES){const group=arr.filter(i=>i.category===categor
  removeButton.setAttribute('aria-label','Remove '+i.name+' from wardrobe');
  removeButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation()});
  row.append(categorySelect,removeButton,node('small',t.packedIds.includes(i.id)?'Packed':''))}}
-if(!arr.length)root.append(node('p','No matching items.','empty'));
+if(!arr.length)root.append(node('p','no matching items in this category.','empty'));
 const pack=$('packingItems');pack.replaceChildren();for(const id of t.itemIds){const i=itemBy(id);if(!i)continue;checkbox(pack,i,t.packedIds.includes(id),yes=>{t.packedIds=yes?[...new Set([...t.packedIds,id])]:t.packedIds.filter(x=>x!==id);persist();render()})}if(!t.itemIds.length)pack.append(node('p','choose trip items from my wardrobe first.','empty'))}
 function removeItem(id){
  const item=itemBy(id);if(!item)return;
