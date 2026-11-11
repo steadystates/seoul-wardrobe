@@ -42,9 +42,30 @@ for(const category of CATEGORIES){const group=arr.filter(i=>i.category===categor
  for(const cat of CATEGORIES){const opt=node('option',cat);opt.value=cat;opt.selected=cat===i.category;categorySelect.append(opt)}
  categorySelect.addEventListener('click',e=>e.stopPropagation());
  categorySelect.addEventListener('change',e=>{i.category=e.target.value;persist();render()});
- row.append(categorySelect,node('small',t.packedIds.includes(i.id)?'Packed':''))}}
+ const removeButton=btn('Remove',()=>removeItem(i.id),'remove-item');
+ removeButton.setAttribute('aria-label','Remove '+i.name+' from wardrobe');
+ removeButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation()});
+ row.append(categorySelect,removeButton,node('small',t.packedIds.includes(i.id)?'Packed':''))}}
 if(!arr.length)root.append(node('p','No matching items.','empty'));
 const pack=$('packingItems');pack.replaceChildren();for(const id of t.itemIds){const i=itemBy(id);if(!i)continue;checkbox(pack,i,t.packedIds.includes(id),yes=>{t.packedIds=yes?[...new Set([...t.packedIds,id])]:t.packedIds.filter(x=>x!==id);persist();render()})}if(!t.itemIds.length)pack.append(node('p','Choose trip items from your catalog first.','empty'))}
+function removeItem(id){
+ const item=itemBy(id);if(!item)return;
+ const affected=state.outfits.filter(o=>o.itemIds.includes(id));
+ const empty=affected.filter(o=>o.itemIds.length===1);
+ const summary='Remove \"'+item.name+'\" from your entire wardrobe?\n\n'+
+  affected.length+' outfit(s) reference this item. '+
+  (empty.length?empty.length+' outfit(s) contain only this item and will also be deleted.\n':'')+
+  'The remaining items in other outfits will stay.\n\nThis cannot be undone except by restoring a previous JSON backup. Export a fresh backup first.';
+ if(!confirm(summary))return;
+ const prior=JSON.stringify(state);
+ state.items=state.items.filter(i=>i.id!==id);
+ for(const trip of state.trips){trip.itemIds=trip.itemIds.filter(x=>x!==id);trip.packedIds=trip.packedIds.filter(x=>x!==id)}
+ state.outfits=state.outfits.map(o=>({...o,itemIds:o.itemIds.filter(x=>x!==id),snapshots:o.snapshots?.filter(x=>x.id!==id)})).filter(o=>o.itemIds.length);
+ selected.delete(id);
+ if(affected.some(o=>o.id===editing))resetEditor();
+ if(!persist()){state=JSON.parse(prior);return}
+ render();alert('Removed '+item.name+'. '+affected.length+' outfit(s) affected, '+empty.length+' empty outfit(s) deleted.');
+}
 $('searchWardrobe').addEventListener('input',renderWardrobe);
 $('categorizeItems').addEventListener('click',()=>{
  const changes=state.items.filter(i=>i.category==='Other').map(i=>({item:i,category:guessCategory(i.name)})).filter(x=>x.category!=='Other');
@@ -70,21 +91,21 @@ $('importCsv').addEventListener('change',async e=>{
   const ix=header?.indexOf('item');
   if(ix==null||ix<0)throw Error('Expected an Item column, as in itemColorKey.csv');
   const catIx=header.indexOf('category');
-  const plannedNew=[],plannedUpdates=[],seen=new Set();
+  const plannedNew=[],plannedUpdates=[],seen=new Set();let matched=0;
   for(const r of rows){
    const name=r[ix]?.trim();if(!name)continue;
-   const key=name.toLocaleLowerCase();
+   const key=name.normalize('NFKC').trim().toLocaleLowerCase();
    if(seen.has(key))throw Error('Duplicate Item in CSV: '+name);
    seen.add(key);
    const supplied=catIx>=0?r[catIx]?.trim():null;
    if(supplied&&!CATEGORIES.includes(supplied))throw Error('Unrecognized category for '+name+': '+supplied);
    const category=supplied||guessCategory(name);
-   const existing=state.items.find(i=>i.name.toLocaleLowerCase()===key);
-   if(existing){if(catIx>=0&&existing.category!==category)plannedUpdates.push({item:existing,category});}
+   const existing=state.items.find(i=>i.name.normalize('NFKC').trim().toLocaleLowerCase()===key);
+   if(existing){matched++;if(catIx>=0&&existing.category!==category)plannedUpdates.push({item:existing,category});}
    else plannedNew.push({id:uid(),name,sourceName:name,category});
   }
-  if(!plannedNew.length&&!plannedUpdates.length){alert('All items already exist and their categories are up to date. No changes made.');return;}
-  const summary='CSV preview: '+plannedNew.length+' new items, '+plannedUpdates.length+' existing categories to update.\n\n'+
+  if(!plannedNew.length&&!plannedUpdates.length){const message='Matched '+matched+' existing items. Categories are already up to date; no changes made.'; $('importStatus').textContent=message;alert(message);return;}
+  const summary='CSV preview: '+rows.length+' CSV rows, '+matched+' matched items, '+plannedNew.length+' new items, '+plannedUpdates.length+' existing categories to update.\n\n'+
    'Existing item IDs, packing lists, outfits, and wear history will be preserved.\n\nApply these changes?';
   if(!confirm(summary))return;
   const prior=JSON.stringify(state);
@@ -92,8 +113,9 @@ $('importCsv').addEventListener('change',async e=>{
   for(const x of plannedUpdates)x.item.category=x.category;
   if(!persist()){state=JSON.parse(prior);return;}
   render();
-  alert('Updated '+plannedUpdates.length+' existing categories and added '+plannedNew.length+' new items locally.');
- }catch(err){alert('CSV import failed: '+err.message)}finally{e.target.value=''}
+  const message='Updated '+plannedUpdates.length+' existing categories; added '+plannedNew.length+' new items; matched '+matched+' existing items.';
+  $('importStatus').textContent=message;alert(message);
+ }catch(err){$('importStatus').textContent='Import failed: '+err.message;alert('CSV import failed: '+err.message)}finally{e.target.value=''}
 });
 function download(name,data,type){const blob=new Blob([data],{type}),url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 const cell=x=>'"'+String(x??'').replaceAll('"','""')+'"';
