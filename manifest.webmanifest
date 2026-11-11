@@ -1,6 +1,6 @@
 {
-  "name": "Seoul Wardrobe",
-  "short_name": "Seoul Wardrobe",
+  "name": "Travel Wardrobe",
+  "short_name": "Wardrobe",
   "description": "Offline travel outfit diary",
   "start_url": "./index.html",
   "scope": "./",
