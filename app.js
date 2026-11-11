@@ -2,15 +2,17 @@
 // Local-only travel wardrobe. Never sends personal records to a server.
 const KEY='travel-wardrobe-v3';
 const LEGACY_KEY=String.fromCharCode(112,104,100,114,101,115,115,101,100)+'-seoul-v1'; // legacy storage migration
-const CATEGORIES=['Tops','Bottoms','Dresses','Outerwear','Shoes','Bags','Accessories','Other'];
+const CATEGORIES=['Tops','Bottoms','Dresses/Rompers','Jackets','Shoes','Bags','Accessories','Other'];
+function canonicalCategory(value){return value==='Outerwear'?'Jackets':value==='Dresses'?'Dresses/Rompers':value;}
+function normalizeCategories(data){for(const item of data.items){item.category=canonicalCategory(item.category||'Other');}for(const outfit of data.outfits){for(const snap of outfit.snapshots||[]){if(snap.category)snap.category=canonicalCategory(snap.category);}}return data;}
 function guessCategory(name){
  const n=name.toLowerCase();
  if(/perfume|fragrance|body spray|eau de |cologne|sample scent/.test(n))return 'Accessories';
  if(/backpack|belt bag|crossbody|tote|purse|handbag|shoulder bag|crescent bag|satchel|carryall|caryall|hobo bag|mini bag|pouch|baggu|bag$/.test(n))return 'Bags';
  if(/sneaker|samba|loafers?|boots?|sandals?|heels?|clogs?|flip.flops?|shoes?|slippers?|flats?|mary janes?|trainers?|oxfords?/.test(n))return 'Shoes';
  if(/necklace|bracelet|earrings?|rings?|scarf|belt|sunglasses|glasses|earmuffs|hair clip|watch|hat|beanie|gloves/.test(n))return 'Accessories';
- if(/jacket|coat|parka|trench|blazer|poncho|shacket|windbreaker|puffer/.test(n))return 'Outerwear';
- if(/dress|romper|jumpsuit|overall/.test(n))return 'Dresses';
+ if(/jacket|coat|parka|trench|blazer|poncho|shacket|windbreaker|puffer/.test(n))return 'Jackets';
+ if(/dress|romper|jumpsuit|overall/.test(n))return 'Dresses/Rompers';
  if(/pants?|jeans?|trousers?|leggings?|joggers?|shorts?|skirt|sweatpants|bloomers|capris|culottes/.test(n))return 'Bottoms';
  if(/shirt|tee|t-shirt|tshirt|top|tank|blouse|sweater|cardigan|hoodie|sweatshirt|bodysuit|cami|bra|vest|turtleneck|pullover|longsleeve|long sleeve/.test(n))return 'Tops';
  return 'Other';
@@ -19,8 +21,8 @@ const $=s=>document.getElementById(s);
 const uid=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const day=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const blank=()=>({schema:3,items:[],trips:[{id:uid(),name:'Seoul 2026',itemIds:[],packedIds:[]}],outfits:[],activeTripId:null});
-function migrateLegacy(x){const s=blank();s.items=x.items.map(i=>({id:i.id,name:i.name,category:CATEGORIES.includes(i.category)?i.category:'Other',sourceName:i.name}));s.trips[0].itemIds=s.items.map(i=>i.id);s.trips[0].packedIds=x.items.filter(i=>i.packed).map(i=>i.id);s.outfits=x.outfits.map(o=>({id:o.id,date:o.date,tripId:s.trips[0].id,itemIds:o.itemIds,notes:o.notes||'',snapshots:o.itemIds.map(id=>({id,name:s.items.find(i=>i.id===id)?.name||'[missing item]'}))}));s.activeTripId=s.trips[0].id;return s}
-function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(valid(x))return x}catch{}try{const old=JSON.parse(localStorage.getItem(LEGACY_KEY));if(old&&Array.isArray(old.items)&&Array.isArray(old.outfits))return migrateLegacy(old)}catch{}const s=blank();s.activeTripId=s.trips[0].id;return s}
+function migrateLegacy(x){const s=blank();s.items=x.items.map(i=>({id:i.id,name:i.name,category:CATEGORIES.includes(i.category)?canonicalCategory(i.category):'Other',sourceName:i.name}));s.trips[0].itemIds=s.items.map(i=>i.id);s.trips[0].packedIds=x.items.filter(i=>i.packed).map(i=>i.id);s.outfits=x.outfits.map(o=>({id:o.id,date:o.date,tripId:s.trips[0].id,itemIds:o.itemIds,notes:o.notes||'',snapshots:o.itemIds.map(id=>({id,name:s.items.find(i=>i.id===id)?.name||'[missing item]'}))}));s.activeTripId=s.trips[0].id;return s}
+function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(valid(x))return normalizeCategories(x)}catch{}try{const old=JSON.parse(localStorage.getItem(LEGACY_KEY));if(old&&Array.isArray(old.items)&&Array.isArray(old.outfits))return migrateLegacy(old)}catch{}const s=blank();s.activeTripId=s.trips[0].id;return s}
 function valid(s){return !!(s&&Array.isArray(s.items)&&Array.isArray(s.trips)&&Array.isArray(s.outfits)&&s.items.every(i=>typeof i.id==='string'&&typeof i.name==='string')&&s.trips.every(t=>typeof t.id==='string'&&typeof t.name==='string'&&Array.isArray(t.itemIds)&&Array.isArray(t.packedIds))&&s.outfits.every(o=>typeof o.id==='string'&&typeof o.date==='string'&&/^\d{4}-\d\d-\d\d$/.test(o.date)&&Array.isArray(o.itemIds)&&typeof o.tripId==='string'))}
 let state=load(),editing=null,selected=new Set();
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));$('saveStatus').textContent='Saved on this device';return true}catch(e){alert('Unable to save! Export a backup now. '+e.message);return false}}
@@ -97,7 +99,7 @@ $('importCsv').addEventListener('change',async e=>{
    const key=name.normalize('NFKC').trim().toLocaleLowerCase();
    if(seen.has(key))throw Error('Duplicate Item in CSV: '+name);
    seen.add(key);
-   const supplied=catIx>=0?r[catIx]?.trim():null;
+   const supplied=catIx>=0?canonicalCategory(r[catIx]?.trim()):null;
    if(supplied&&!CATEGORIES.includes(supplied))throw Error('Unrecognized category for '+name+': '+supplied);
    const category=supplied||guessCategory(name);
    const existing=state.items.find(i=>i.name.normalize('NFKC').trim().toLocaleLowerCase()===key);
@@ -125,6 +127,6 @@ $('exportJson').addEventListener('click',()=>{download('travel-wardrobe-backup-'
 $('restoreJson').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{const x=JSON.parse(await f.text());let incoming;if(valid(x))incoming={schema:3,items:x.items,trips:x.trips,outfits:x.outfits,activeTripId:x.activeTripId};else if(Array.isArray(x.items)&&Array.isArray(x.outfits))incoming=migrateLegacy(x);else throw Error('Not a supported wardrobe backup');const unique=a=>new Set(a).size===a.length;
 if(!unique(incoming.items.map(i=>i.id))||!unique(incoming.trips.map(t=>t.id))||!unique(incoming.outfits.map(o=>o.id)))throw Error('Backup contains duplicate IDs');
 if(incoming.trips.some(t=>t.itemIds.some(id=>!incoming.items.some(i=>i.id===id))||t.packedIds.some(id=>!t.itemIds.includes(id))))throw Error('Backup contains invalid packing references');
-const missing=incoming.outfits.filter(o=>!incoming.trips.some(t=>t.id===o.tripId));if(missing.length)throw Error('Backup has outfits without a trip');const summary=`Backup: ${incoming.items.length} items, ${incoming.trips.length} trips, ${incoming.outfits.length} outfits.\nCurrent: ${state.items.length} items, ${state.trips.length} trips, ${state.outfits.length} outfits.\n\nReplace all local data? Export your current backup first.`;if(!confirm(summary))return;const old=state;state=incoming;if(!persist()){state=old;return}resetEditor();render();alert('Restore complete. Check your outfit history and export a fresh backup.')}catch(err){alert('Restore failed: '+err.message)}finally{e.target.value=''}});
+const missing=incoming.outfits.filter(o=>!incoming.trips.some(t=>t.id===o.tripId));if(missing.length)throw Error('Backup has outfits without a trip');const summary=`Backup: ${incoming.items.length} items, ${incoming.trips.length} trips, ${incoming.outfits.length} outfits.\nCurrent: ${state.items.length} items, ${state.trips.length} trips, ${state.outfits.length} outfits.\n\nReplace all local data? Export your current backup first.`;if(!confirm(summary))return;const old=state;state=normalizeCategories(incoming);if(!persist()){state=old;return}resetEditor();render();alert('Restore complete. Check your outfit history and export a fresh backup.')}catch(err){alert('Restore failed: '+err.message)}finally{e.target.value=''}});
 if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').then(()=>$('offlineStatus').textContent='Offline cache registered. Test in Airplane Mode.').catch(()=>$('offlineStatus').textContent='Offline cache registration failed.');else $('offlineStatus').textContent='Offline install requires HTTPS.';
 render();
