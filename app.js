@@ -26,7 +26,7 @@ function normalizeState(x){normalizeCategories(x);if(!Array.isArray(x.purchases)
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(valid(x))return normalizeState(x)}catch{}try{const old=JSON.parse(localStorage.getItem(LEGACY_KEY));if(old&&Array.isArray(old.items)&&Array.isArray(old.outfits))return migrateLegacy(old)}catch{}const s=blank();s.activeTripId=s.trips[0].id;return s}
 function valid(s){return !!(s&&(!('purchases' in s)||Array.isArray(s.purchases)&&s.purchases.every(p=>typeof p.id==='string'&&typeof p.itemId==='string'&&typeof p.tripId==='string'&&typeof p.date==='string'))&&Array.isArray(s.items)&&Array.isArray(s.trips)&&Array.isArray(s.outfits)&&s.items.every(i=>typeof i.id==='string'&&typeof i.name==='string')&&s.trips.every(t=>typeof t.id==='string'&&typeof t.name==='string'&&Array.isArray(t.itemIds)&&Array.isArray(t.packedIds))&&s.outfits.every(o=>typeof o.id==='string'&&typeof o.date==='string'&&/^\d{4}-\d\d-\d\d$/.test(o.date)&&Array.isArray(o.itemIds)&&typeof o.tripId==='string'))}
 let state=load(),editing=null,selected=new Set(),editingPurchase=null;
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));$('saveStatus').textContent='Saved on this device';return true}catch(e){alert('Unable to save! Export a backup now. '+e.message);return false}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));$('saveStatus').textContent='saved on this device';return true}catch(e){alert('Unable to save! Export a backup now. '+e.message);return false}}
 persist();
 const active=()=>state.trips.find(t=>t.id===state.activeTripId)||state.trips[0];
 const itemBy=id=>state.items.find(i=>i.id===id);
@@ -41,7 +41,7 @@ $('newTrip').addEventListener('click',()=>{const name=prompt('New trip name:');i
 $('renameTrip').addEventListener('click',()=>{const name=prompt('Rename this trip:',active().name);if(name?.trim()){active().name=name.trim();persist();render()}});
 $('date').value=day();
 function renderWardrobe(){const t=active(),root=$('wardrobeItems');root.replaceChildren();const q=$('searchWardrobe').value.trim().toLowerCase();const arr=state.items.filter(i=>!q||i.name.toLowerCase().includes(q));$('catalogCount').textContent=`${state.items.length} catalog items · ${t.itemIds.length} in this trip`;
-for(const category of CATEGORIES){const group=arr.filter(i=>i.category===category);if(!group.length)continue;root.append(node('h3',category));for(const i of group){const row=checkbox(root,i,t.itemIds.includes(i.id),yes=>{if(yes&&!t.itemIds.includes(i.id))t.itemIds.push(i.id);if(!yes){t.itemIds=t.itemIds.filter(x=>x!==i.id);t.packedIds=t.packedIds.filter(x=>x!==i.id)}persist();render()});const categorySelect=node('select');categorySelect.className='category-select';categorySelect.setAttribute('aria-label','Category for '+i.name);
+for(const category of CATEGORIES){const group=arr.filter(i=>i.category===category);if(!group.length)continue;root.append(node('h3',category.toLowerCase()+'. ♱','catalog-heading'));for(const i of group){const row=checkbox(root,i,t.itemIds.includes(i.id),yes=>{if(yes&&!t.itemIds.includes(i.id))t.itemIds.push(i.id);if(!yes){t.itemIds=t.itemIds.filter(x=>x!==i.id);t.packedIds=t.packedIds.filter(x=>x!==i.id)}persist();render()});const categorySelect=node('select');categorySelect.className='category-select';categorySelect.setAttribute('aria-label','Category for '+i.name);
  for(const cat of CATEGORIES){const opt=node('option',cat);opt.value=cat;opt.selected=cat===i.category;categorySelect.append(opt)}
  categorySelect.addEventListener('click',e=>e.stopPropagation());
  categorySelect.addEventListener('change',e=>{i.category=e.target.value;persist();render()});
@@ -50,7 +50,7 @@ for(const category of CATEGORIES){const group=arr.filter(i=>i.category===categor
  removeButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation()});
  row.append(categorySelect,removeButton,node('small',t.packedIds.includes(i.id)?'Packed':''))}}
 if(!arr.length)root.append(node('p','No matching items.','empty'));
-const pack=$('packingItems');pack.replaceChildren();for(const id of t.itemIds){const i=itemBy(id);if(!i)continue;checkbox(pack,i,t.packedIds.includes(id),yes=>{t.packedIds=yes?[...new Set([...t.packedIds,id])]:t.packedIds.filter(x=>x!==id);persist();render()})}if(!t.itemIds.length)pack.append(node('p','Choose trip items from your catalog first.','empty'))}
+const pack=$('packingItems');pack.replaceChildren();for(const id of t.itemIds){const i=itemBy(id);if(!i)continue;checkbox(pack,i,t.packedIds.includes(id),yes=>{t.packedIds=yes?[...new Set([...t.packedIds,id])]:t.packedIds.filter(x=>x!==id);persist();render()})}if(!t.itemIds.length)pack.append(node('p','choose trip items from my wardrobe first.','empty'))}
 function removeItem(id){
  const item=itemBy(id);if(!item)return;
  const affected=state.outfits.filter(o=>o.itemIds.includes(id));
@@ -81,11 +81,11 @@ $('categorizeItems').addEventListener('click',()=>{
 });
 
 $('addItem').addEventListener('click',()=>{const name=$('newItem').value.trim();if(!name)return;let i=state.items.find(x=>x.name.toLowerCase()===name.toLowerCase());if(!i){i={id:uid(),name,sourceName:name,category:$('category').value};state.items.push(i)}if(!active().itemIds.includes(i.id))active().itemIds.push(i.id);$('newItem').value='';persist();render()});
-function renderLog(){const root=$('logItems');root.replaceChildren();const t=active();const items=t.itemIds.map(itemBy).filter(Boolean);for(const cat of CATEGORIES){const group=items.filter(i=>i.category===cat);if(!group.length)continue;root.append(node('h3',cat));for(const i of group)checkbox(root,i,selected.has(i.id),yes=>{yes?selected.add(i.id):selected.delete(i.id)})}if(!items.length)root.append(node('p','Add items to this trip under Wardrobe.','empty'))}
+function renderLog(){const root=$('logItems');root.replaceChildren();const t=active();const items=t.itemIds.map(itemBy).filter(Boolean);for(const cat of CATEGORIES){const group=items.filter(i=>i.category===cat);if(!group.length)continue;root.append(node('h3',cat.toLowerCase()+'. ♱','catalog-heading'));for(const i of group)checkbox(root,i,selected.has(i.id),yes=>{yes?selected.add(i.id):selected.delete(i.id)})}if(!items.length)root.append(node('p','add items to this trip under my wardrobe.','empty'))}
 $('saveOutfit').addEventListener('click',()=>{const date=$('date').value,ids=[...selected];if(!date||!ids.length)return alert('Choose a date and at least one item.');const outfit={id:editing||uid(),tripId:active().id,date,notes:$('outfitNotes').value.trim(),itemIds:ids,snapshots:ids.map(id=>({id,name:itemBy(id)?.name||'[missing item]',category:itemBy(id)?.category||'Other'}))};if(editing)state.outfits=state.outfits.map(o=>o.id===editing?outfit:o);else state.outfits.push(outfit);if(!persist())return;resetEditor();tab('history')});
 function resetEditor(){editing=null;selected.clear();$('date').value=day();$('outfitNotes').value='';$('saveOutfit').textContent='Save outfit';$('cancelEdit').classList.add('hidden')}
 $('cancelEdit').addEventListener('click',()=>{resetEditor();render()});
-function renderHistory(){const root=$('historyItems');root.replaceChildren();const arr=state.outfits.filter(o=>o.tripId===active().id).sort((a,b)=>b.date.localeCompare(a.date));if(!arr.length){root.append(node('p','No outfits logged for this trip yet.','empty'));return}for(const o of arr){const p=node('div',undefined,'panel');p.append(node('strong',o.date));if(o.notes)p.append(node('p',o.notes,'muted'));p.append(node('p',o.itemIds.map(id=>itemBy(id)?.name||o.snapshots?.find(s=>s.id===id)?.name||'[unknown]').join(' · ')));const a=node('div',undefined,'actions');a.append(btn('Edit',()=>{state.activeTripId=o.tripId;editing=o.id;selected=new Set(o.itemIds);$('date').value=o.date;$('outfitNotes').value=o.notes||'';$('saveOutfit').textContent='Update outfit';$('cancelEdit').classList.remove('hidden');tab('log')}),btn('Delete',()=>{if(confirm('Delete this outfit? This removes its wears from exports.')){state.outfits=state.outfits.filter(x=>x.id!==o.id);persist();render()}},'danger'));p.append(a);root.append(p)}}
+function renderHistory(){const root=$('historyItems');root.replaceChildren();const arr=state.outfits.filter(o=>o.tripId===active().id).sort((a,b)=>b.date.localeCompare(a.date));if(!arr.length){root.append(node('p','no outfits logged for this trip yet.','empty'));return}for(const o of arr){const p=node('div',undefined,'panel');p.append(node('strong',o.date));if(o.notes)p.append(node('p',o.notes,'muted'));p.append(node('p',o.itemIds.map(id=>itemBy(id)?.name||o.snapshots?.find(s=>s.id===id)?.name||'[unknown]').join(' · ')));const a=node('div',undefined,'actions');a.append(btn('Edit',()=>{state.activeTripId=o.tripId;editing=o.id;selected=new Set(o.itemIds);$('date').value=o.date;$('outfitNotes').value=o.notes||'';$('saveOutfit').textContent='Update outfit';$('cancelEdit').classList.remove('hidden');tab('log')}),btn('Delete',()=>{if(confirm('Delete this outfit? This removes its wears from exports.')){state.outfits=state.outfits.filter(x=>x.id!==o.id);persist();render()}},'danger'));p.append(a);root.append(p)}}
 // Acquired abroad: an item belongs to the shared catalog, while its purchase belongs to one trip.
 const purchaseFormIds=['purchaseName','purchaseCategory','purchaseDate','purchaseStore','purchasePrice','purchaseCurrency','purchaseNotes'];
 function resetPurchaseEditor(){editingPurchase=null;for(const id of purchaseFormIds){const field=$(id);if(field)field.value='';} $('purchaseDate').value=day();$('purchaseCategory').value='Tops';$('purchaseCurrency').value='KRW';$('savePurchase').textContent='Save acquisition';$('cancelPurchaseEdit').classList.add('hidden');}
@@ -94,7 +94,7 @@ function renderPurchases(){
  const t=active(), list=$('purchaseItems');list.replaceChildren();
  const arr=state.purchases.filter(x=>x.tripId===t.id).sort((a,b)=>b.date.localeCompare(a.date));
  $('purchaseCount').textContent=`${arr.length} acquisition${arr.length===1?'':'s'} on this trip`;
- if(!arr.length){list.append(node('p','Nothing acquired yet. Your future Seoul finds will live here.','empty'));return;}
+ if(!arr.length){list.append(node('p','nothing acquired yet. my future travel finds will live here.','empty'));return;}
  for(const purchase of arr){
   const item=itemBy(purchase.itemId), card=node('div',undefined,'panel purchase-card');
   card.append(node('small',purchase.date+' · '+(purchase.store||'shop not recorded')));
@@ -144,7 +144,7 @@ $('savePurchase').addEventListener('click',()=>{
  if(editingPurchase){const purchase=state.purchases.find(p=>p.id===editingPurchase);Object.assign(purchase,{itemId:item.id,itemName:item.name,date,store,price:amount,currency,notes,category});}
  else state.purchases.push({id:uid(),tripId:t.id,itemId:item.id,itemName:item.name,date,store,price:amount,currency,notes,category});
  if(!persist()){state=JSON.parse(before);return}
- resetPurchaseEditor();render();$('purchaseStatus').textContent='Saved in acquired abroad and added to this trip’s wardrobe.';
+ resetPurchaseEditor();render();$('purchaseStatus').textContent='saved in acquired abroad and added to my trip wardrobe.';
 });
 $('cancelPurchaseEdit').addEventListener('click',()=>{resetPurchaseEditor();render()});
 $('exportPurchases').addEventListener('click',()=>{

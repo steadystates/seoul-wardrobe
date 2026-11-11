@@ -1,7 +1,7 @@
 {
   "name": "Travel Outfit Diary",
-  "short_name": "Wardrobe",
-  "description": "Offline travel outfit diary",
+  "short_name": "outfit diary",
+  "description": "my travel wardrobe. ♱ ✧",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
