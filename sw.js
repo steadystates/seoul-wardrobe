@@ -1,4 +1,4 @@
-const CACHE='travel-wardrobe-v310-20261119';
+const CACHE='travel-wardrobe-v311-20261119';
 const FILES=['./','./index.html','./app.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 const FONT_HOSTS=new Set(['fonts.googleapis.com','fonts.gstatic.com','cdn.jsdelivr.net']);
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));

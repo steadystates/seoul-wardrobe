@@ -221,13 +221,22 @@ if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWo
 render();
 
 // Diagnostic only: does not modify wardrobe data.
-function checkDisplayFont(){
+async function checkDisplayFont(){
  const el=$('fontStatus');
  if(!document.fonts || !document.fonts.load){el.textContent='font status unavailable in this browser';return;}
- el.textContent='checking jacquard 12...';
- document.fonts.load('400 48px "Jacquard 12"','TRAVEL OUTFIT DIARY').then(faces=>{
-  el.textContent=faces.length?'jacquard 12 loaded successfully.':'jacquard 12 did not load. open the app online and try again.';
- }).catch(()=>{el.textContent='jacquard 12 could not load. check your connection or content blockers.';});
+ el.textContent='checking jacquard 12 and chivo...';
+ try{
+  const checks=await Promise.allSettled([
+   document.fonts.load('400 42px "Jacquard 12"','travel outfit diary'),
+   document.fonts.load('400 16px "Chivo"','what i packed, what i wore'),
+   document.fonts.load('700 16px "Chivo"','log today outfit')
+  ]);
+  const status=checks.map(check=>check.status==='fulfilled'&&check.value.length>0);
+  el.textContent='jacquard 12: '+(status[0]?'loaded':'not loaded')+
+   ' · chivo regular: '+(status[1]?'loaded':'not loaded')+
+   ' · chivo bold: '+(status[2]?'loaded':'not loaded')+'.';
+  if(!status.every(Boolean))el.textContent+=' open the app online and check again; safari may be showing fallback fonts.';
+ }catch(err){el.textContent='font check unavailable: '+err.message;}
 }
 $('retryFont').addEventListener('click',checkDisplayFont);
 checkDisplayFont();
