@@ -219,3 +219,15 @@ if(incoming.purchases.some(p=>!incoming.items.some(i=>i.id===p.itemId)||!incomin
 const missing=incoming.outfits.filter(o=>!incoming.trips.some(t=>t.id===o.tripId));if(missing.length)throw Error('Backup has outfits without a trip');const summary=`Backup: ${incoming.items.length} items, ${incoming.trips.length} trips, ${incoming.outfits.length} outfits, ${incoming.purchases.length} acquisitions.\nCurrent: ${state.items.length} items, ${state.trips.length} trips, ${state.outfits.length} outfits, ${state.purchases.length} acquisitions.\n\nReplace all local data? Export your current backup first.`;if(!confirm(summary))return;const old=state;state=normalizeState(incoming);if(!persist()){state=old;return}resetEditor();resetPurchaseEditor();render();alert('Restore complete. Check your outfit history and export a fresh backup.')}catch(err){alert('Restore failed: '+err.message)}finally{e.target.value=''}});
 if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').then(()=>$('offlineStatus').textContent='Offline cache registered. Test in Airplane Mode.').catch(()=>$('offlineStatus').textContent='Offline cache registration failed.');else $('offlineStatus').textContent='Offline install requires HTTPS.';
 render();
+
+// Diagnostic only: does not modify wardrobe data.
+function checkDisplayFont(){
+ const el=$('fontStatus');
+ if(!document.fonts || !document.fonts.load){el.textContent='font status unavailable in this browser';return;}
+ el.textContent='checking jacquard 12...';
+ document.fonts.load('400 48px "Jacquard 12"','TRAVEL OUTFIT DIARY').then(faces=>{
+  el.textContent=faces.length?'jacquard 12 loaded successfully.':'jacquard 12 did not load. open the app online and try again.';
+ }).catch(()=>{el.textContent='jacquard 12 could not load. check your connection or content blockers.';});
+}
+$('retryFont').addEventListener('click',checkDisplayFont);
+checkDisplayFont();

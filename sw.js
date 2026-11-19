@@ -1,6 +1,6 @@
-const CACHE='travel-wardrobe-v39-20261119';
+const CACHE='travel-wardrobe-v310-20261119';
 const FILES=['./','./index.html','./app.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
-const FONT_HOSTS=new Set(['fonts.googleapis.com','fonts.gstatic.com']);
+const FONT_HOSTS=new Set(['fonts.googleapis.com','fonts.gstatic.com','cdn.jsdelivr.net']);
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('travel-wardrobe-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
